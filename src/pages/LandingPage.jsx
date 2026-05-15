@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { databases, Query, DATABASE_ID, COLLECTIONS } from '../appwriteClient';
 import { useAuth } from '../context/AuthContext';
-import logoImage from '../assets/namavruksha-logo.png';
+import yogiImage from '../assets/YogiPic01.jpg';
 import './LandingPage.css';
 
 const LandingPage = () => {
@@ -17,67 +17,27 @@ const LandingPage = () => {
 
     useEffect(() => {
         const fetchData = async () => {
-            let userCount = 0;
+            const [accountsResult, namaResult, usersResult] = await Promise.allSettled([
+                databases.listDocuments(DATABASE_ID, COLLECTIONS.NAMA_ACCOUNTS, [Query.equal('is_active', true), Query.limit(100)]),
+                databases.listDocuments(DATABASE_ID, COLLECTIONS.NAMA_ENTRIES, [Query.limit(2000)]),
+                databases.listDocuments(DATABASE_ID, COLLECTIONS.USERS, [Query.limit(1)]),
+            ]);
+
+            const accountCount = accountsResult.status === 'fulfilled'
+                ? (accountsResult.value.total || accountsResult.value.documents.length) : 0;
+
             let totalNama = 0;
             let totalDevoteesSum = 0;
-            let accountCount = 0;
-            let fallbackUserCount = 0;
-
-            // 1. Fetch Active Accounts Count (for Sankalpas)
-            try {
-                const accountsResponse = await databases.listDocuments(
-                    DATABASE_ID,
-                    COLLECTIONS.NAMA_ACCOUNTS,
-                    [Query.equal('is_active', true), Query.limit(100)]
-                );
-                accountCount = accountsResponse.total || accountsResponse.documents.length;
-            } catch (err) {
-                console.error('Error fetching accounts count:', err);
+            if (namaResult.status === 'fulfilled') {
+                const docs = namaResult.value.documents || [];
+                totalNama = docs.reduce((sum, e) => sum + (e.count || 0), 0);
+                totalDevoteesSum = docs.reduce((sum, e) => {
+                    const d = parseInt(e.devotee_count);
+                    return sum + (isNaN(d) || d === 0 ? 1 : d);
+                }, 0);
             }
 
-            // 2. Fetch Nama Entries (Core Stats)
-            try {
-                const namaResponse = await databases.listDocuments(
-                    DATABASE_ID,
-                    COLLECTIONS.NAMA_ENTRIES,
-                    [Query.limit(10000)]
-                );
-
-                totalNama = namaResponse.documents?.reduce((sum, entry) => sum + (entry.count || 0), 0) || 0;
-
-                // Sum devotees from entries
-                totalDevoteesSum = namaResponse.documents?.reduce((sum, entry) => {
-                    const devotees = parseInt(entry.devotee_count);
-                    return sum + (isNaN(devotees) || devotees === 0 ? 1 : devotees);
-                }, 0) || 0;
-
-                // Calculate fallback user count from unique user_ids in entries
-                const uniqueUserIds = new Set(namaResponse.documents?.map(entry => entry.user_id).filter(Boolean));
-                fallbackUserCount = uniqueUserIds.size;
-
-            } catch (err) {
-                console.error('Error fetching nama stats:', err);
-            }
-
-            // 3. Fetch Total Users (Optional/Permission Sensitive)
-            try {
-                const usersResponse = await databases.listDocuments(
-                    DATABASE_ID,
-                    COLLECTIONS.USERS,
-                    [Query.limit(1)] // We only need the total count
-                );
-                userCount = usersResponse.total || 0;
-            } catch (err) {
-                console.warn('Error fetching user count (likely permission issue), using fallback:', err);
-                // Fallback: Use unique user IDs from nama entries
-                userCount = fallbackUserCount;
-            }
-
-            // If userCount is still 0 (e.g. fetch succeeded but returned 0, or both failed), 
-            // but we have fallback data, prefer the larger number to avoid showing "0 Users" artificially.
-            if (userCount === 0 && fallbackUserCount > 0) {
-                userCount = fallbackUserCount;
-            }
+            const userCount = usersResult.status === 'fulfilled' ? (usersResult.value.total || 0) : 0;
 
             setLiveStats({
                 totalRegisteredUsers: userCount,
@@ -87,7 +47,6 @@ const LandingPage = () => {
             });
             setLoading(false);
         };
-
         fetchData();
     }, []);
 
@@ -101,7 +60,6 @@ const LandingPage = () => {
 
     return (
         <div className="landing-page">
-            {/* Animated Background */}
             <div className="animated-bg">
                 <div className="floating-om om-1">ॐ</div>
                 <div className="floating-om om-2">ॐ</div>
@@ -109,21 +67,68 @@ const LandingPage = () => {
             </div>
 
             <div className="landing-container">
-                {/* Hero Section */}
+
+                {/* ── Hero: split left/right ── */}
                 <header className="hero-section fade-in">
-                    <div className="logo-container">
-                        <img src={logoImage} alt="Namavruksha - The Divine Tree" className="logo-image" />
+                    <div className="hero-split">
+
+                        {/* LEFT */}
+                        <div className="hero-left">
+                            <img src={yogiImage} alt="Bhagawan Yogi Ramsuratkumar" className="yogi-photo" />
+                            <h1 className="hero-title">Namavruksha</h1>
+                            <p className="hero-tagline">The Divine Tree of the Holy Name</p>
+                            <p className="hero-description">
+                                <span className="highlight-text">Namavruksha</span> is a humble digital space for devotees to chant and count Nama with sincerity,
+                                and offer it together as a collective spiritual <span className="highlight-text">sankalpa</span>.
+                            </p>
+                            <div className="greeting-text">🙏 Yogi Ramsuratkumar Jaya Guru Raya! 🙏</div>
+                        </div>
+
+                        {/* RIGHT */}
+                        <div className="hero-right">
+                            <div className="challenge-panel">
+                                <div className="challenge-header">
+                                    <span className="challenge-live-tag">June 2025 · Live now</span>
+                                    <h2 className="challenge-title">June 1008 Nama Sadhana</h2>
+                                    <p className="challenge-subtitle">June Consistency Daily Chanting Challenge</p>
+                                </div>
+                                <div className="challenge-body">
+                                    <p className="challenge-intro">
+                                        Not a competition … a collective offering through Nama. Chant together and grow a global NamaVruksha for Bhagawan Yogi Ramsuratkumar.
+                                    </p>
+                                    <div className="challenge-info-row">
+                                        <div className="challenge-info-box">
+                                            <span className="challenge-info-label">Daily target</span>
+                                            <span className="challenge-info-val big">1008 Namas</span>
+                                            <span className="challenge-info-note">3× Yogi Ramsuratkumar + Jaya Guru Raya = 4 Namas</span>
+                                        </div>
+                                        <div className="challenge-info-box">
+                                            <span className="challenge-info-label">Completion blessing</span>
+                                            <span className="challenge-info-val">First 3 devotees receive <em>Saranagatham</em> Annual Subscription</span>
+                                        </div>
+                                    </div>
+                                    <div className="challenge-steps">
+                                        <p className="challenge-steps-label">How to join</p>
+                                        <div className="challenge-step">
+                                            <span className="challenge-step-num">1</span>
+                                            <span>Visit namavruksha.org and register with the <em>Sankalpa – 1008 Daily Chanting</em></span>
+                                        </div>
+                                        <div className="challenge-step">
+                                            <span className="challenge-step-num">2</span>
+                                            <span>Login → Dashboard → Invest Nama → set today as start &amp; end date → submit count</span>
+                                        </div>
+                                    </div>
+                                    <div className="challenge-footer-note">
+                                        Simple. Sincere. Powerful. Let Nama guide us.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
-                    <h1 className="hero-title">Namavruksha</h1>
-                    <p className="hero-tagline">The Divine Tree of the Holy Name</p>
-                    <p className="hero-description">
-                        <span className="highlight-text">Namavruksha</span> is a humble digital space for devotees to chant and count Nama with sincerity,
-                        and offer it together as a collective spiritual <span className="highlight-text">sankalpa</span>.
-                    </p>
-                    <div className="greeting-text">🙏 Yogi Ramsuratkumar Jaya Guru Raya! 🙏</div>
                 </header>
 
-                {/* Question Cards Section */}
+                {/* FAQ Cards */}
                 <section className="faq-cards-section fade-in-delay-1">
                     <div className="faq-cards">
                         <div className="faq-card">
@@ -169,7 +174,6 @@ const LandingPage = () => {
                             <h3>Join Sankalpa</h3>
                             <p>Begin your Nama journey</p>
                         </Link>
-
                         {authLoading ? (
                             <div className="action-card loading">
                                 <span className="action-icon">⏳</span>
@@ -188,7 +192,6 @@ const LandingPage = () => {
                                 <p>Continue your offering</p>
                             </Link>
                         )}
-
                         <Link to="/reports/public" className="action-card">
                             <span className="action-icon">📊</span>
                             <h3>Reports</h3>
@@ -215,7 +218,7 @@ const LandingPage = () => {
                     <Link to="/prayers" className="media-link">🙏 Prayers</Link>
                 </section>
 
-                {/* Divyavani Sub Domain Links */}
+                {/* Divyavani Links */}
                 <section className="media-compact" style={{ marginTop: '0.5rem' }}>
                     <a href="https://divyavanienglish.namavruksha.org" target="_blank" rel="noopener noreferrer" className="media-link" style={{ background: 'linear-gradient(135deg, #FF9933, #E88800)', color: 'white' }}>
                         🙏 Divyavani English
@@ -227,18 +230,14 @@ const LandingPage = () => {
 
                 {/* Footer */}
                 <footer className="landing-footer">
-                    <div className="footer-logo">
-                        🌳 <strong>Namavruksha</strong>
-                    </div>
+                    <div className="footer-logo">🌳 <strong>Namavruksha</strong></div>
                     <p className="footer-tagline">Rooted in Nama. Growing in Faith. Bearing Fruits Beyond Life.</p>
-
-
-
                     <div className="admin-links">
                         <Link to="/moderator/login">Moderator</Link>
                         <Link to="/admin/login">Admin</Link>
                     </div>
                 </footer>
+
             </div>
         </div>
     );
